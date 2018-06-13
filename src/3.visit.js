@@ -10,21 +10,18 @@ function signed(val, secret) {
         .replace(/\=+$/, '');
 }
 function unsign(val, secret) {//val还是encode之后的值
-    let decodeVal = decodeURIComponent(val);
-    let firstDot = decodeVal.indexOf('.');
-    let v = decodeVal.slice(2, firstDot);// "1"
-    console.log(signed(v, secret), decodeURIComponent(val));
+    let value = val.slice(2, val.indexOf('.'));// "1"
     //signed的值是没有编码的 ，包含+的
-    return signed(v, secret) == decodeURIComponent(val) ? v : false;
+    return signed(value, secret) == val ? value : false;
 }
 function cookieParser(secret) {
     return function (req, res, next) {
         req.secret = secret;
         let cookie = req.headers.cookie;// name=s:9.xxxxxxxxxxxxx
         if (cookie) {
-            //let cookies = querystring.parse(cookie, '; ');//{name:'s:9.xxxxxxxxxxxxx'}
+            let cookies = querystring.parse(cookie, '; ');//{name:'s:9.xxxxxxxxxxxxx'}
+            let signedCookies = {};
             if (secret) {//{name:9}
-                let signedCookies = {};
                 let values = cookie.split('; ');
                 for (let i = 0; i < values.length; i++) {
                     let value = values[i];
@@ -33,10 +30,10 @@ function cookieParser(secret) {
                 }
                 req.signedCookies = signedCookies;
             }
-            //req.cookies = cookies;
+            req.cookies = cookies;
             next();
         } else {
-            req.cookies = {};
+            req.cookies = req.signedCookies = {};
             next();
         }
     }
@@ -47,7 +44,7 @@ app.use(cookieParser('zfpx'))
 app.use(function (req, res, next) {
     res.cookie = function (key, val, options) {
         //Set-Cookie:name=zfpx; Path=/; HttpOnly
-        let pairs = [`${key}=${encodeURIComponent(signed(String(val), this.req.secret))}`];//["name=zfpx"]
+        let pairs = [`${key}=${signed(String(val), this.req.secret)}`];//["name=zfpx"]
         if (options.domain) {
             pairs.push(`Domain=${options.domain}`);
         }
@@ -71,8 +68,6 @@ app.use(function (req, res, next) {
 
 app.get('/visit', function (req, res) {
     let visit = req.signedCookies.visit;
-    console.log(req.cookies);
-    console.log(req.signedCookies);
     if (visit) {
         visit = isNaN(visit) ? 0 : Number(visit) + 1;
     } else {
